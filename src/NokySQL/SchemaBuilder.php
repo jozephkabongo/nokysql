@@ -1,6 +1,7 @@
 <?php
 
 namespace NokySQL;
+use \Closure;
 
 class SchemaBuilder {
     private Database $db;
@@ -9,21 +10,34 @@ class SchemaBuilder {
         $this->db = $db;
     }
 
-    public function createTable(string $table, \Closure $blueprint): self {
-        $schema = new TableSchema(table: $table, driver: $this->db->getDriver());
+    public function build(string $table, Closure $blueprint): string {
+        $schema = new TableSchema($table, $this->db->getDriver());
         $blueprint($schema);
 
-        $columns = [];
-        foreach ($schema->getColumns() as $column) {
-            $columns[] = $column->build();
+        $columns = $schema->getColumns();
+        $constraints = $schema->getConstraints();
+
+        $sql = "CREATE TABLE $table (\n"
+             . implode(separator: ",\n", array: $columns);
+
+        if (!empty($constraints)) {
+            $sql .= ",\n" . implode(separator: ",\n", array: $constraints);
         }
 
-        $sql = "CREATE TABLE $table (\n" . implode(separator: ",\n", array: $columns) . "\n)";
-        
-        if ($this->db->getDriver() === 'mysql') {
-            $sql .= " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-        }
+        $sql .= "\n)";
 
+        switch ($this->db->getDriver()) {
+            case 'mysql':
+                return $sql . " ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+            case 'pgsql':
+                return $sql . " WITH (OIDS=FALSE)";
+            default:
+                return $sql;
+        }
+    }
+
+    public function createTable(string $table, Closure $blueprint): self {
+        $sql = $this->build(table: $table, blueprint: $blueprint);
         $this->db->query(sql: $sql);
         return $this;
     }
@@ -35,50 +49,104 @@ class SchemaBuilder {
 }
 
 class TableSchema {
-    private array $columns = [];
     private string $driver;
+    private array $columns = [];
+    private ?string $currentColumn = null;
+    private array $constraints = [];
+    
 
     public function __construct(private string $table, string $driver) {
         $this->driver = $driver;
     }
 
     public function id(string $name = 'id'): self {
-        $type = match($this->driver) {
-            'pgsql' => 'SERIAL',
-            default => 'INTEGER'
+        $this->currentColumn = match($this->driver) {
+            'mysql' => "$name INT AUTO_INCREMENT PRIMARY KEY",
+            'pgsql' => "$name SERIAL PRIMARY KEY",
+            'sqlite' => "$name INTEGER PRIMARY KEY AUTOINCREMENT"
         };
-
-        $this->columns[] = "$name $type PRIMARY KEY" . 
-            ($this->driver === 'mysql' ? ' AUTO_INCREMENT' : '');
-
+        $this->columns[] = $this->currentColumn;
         return $this;
     }
 
     public function string(string $name, int $length = 255): self {
-        $this->columns[] = "$name VARCHAR($length)";
+        $this->currentColumn = "$name VARCHAR($length)";
+        $this->columns[] = $this->currentColumn;
         return $this;
     }
 
     public function integer(string $name): self {
-        $this->columns[] = "$name INTEGER";
+        $this->currentColumn = "$name INT NOT NULL";
+        $this->columns[] = $this->currentColumn;
         return $this;
     }
 
     public function boolean(string $name): self {
-        $this->columns[] = "$name BOOLEAN";
+        $this->currentColumn = "$name BOOLEAN NOT NULL";
+        $this->columns[] = $this->currentColumn;
+        return $this;
+    }
+
+    public function unique(): self {
+        if (empty($this->columns)) {
+            throw new \RuntimeException(message: "Cannot set unique constraint without column");
+        }
+        $this->columns[count(value: $this->columns)-1] .= " UNIQUE";
+        return $this;
+    }
+
+    public function addUniqueConstraint(array $columns): self {
+        $this->constraints[] = 'UNIQUE (' . implode(separator: ', ', array: $columns) . ')';
+        return $this;
+    }
+    public function nullable(): self {
+        $this->columns[count(value: $this->columns)-1] = str_replace(
+            search: 'NOT NULL', 
+            replace: 'NULL', 
+            subject: $this->columns[count(value: $this->columns)-1]
+        );
+        return $this;
+    }
+
+    public function default($value): self {
+        $value = is_string(value: $value) ? "'".addslashes(string: $value)."'" : $value;
+        $this->columns[count(value: $this->columns)-1] .= " DEFAULT $value";
+        return $this;
+    }
+
+    public function required(): self {
+        $colIndex = count($this->columns) - 1;
+        $current = $this->columns[$colIndex];
+        $current = preg_replace(pattern: '/\s(NULL|NOT NULL)/', replacement: '', subject: $current);
+        $this->columns[$colIndex] = $current . ' NOT NULL';
+        
         return $this;
     }
 
     public function timestamp(string $name): self {
-        $type = match($this->driver) {
-            'pgsql' => 'TIMESTAMP',
-            default => 'DATETIME'
+        $this->currentColumn = "$name TIMESTAMP NULL";
+        $this->columns[] = $this->currentColumn;
+        return $this;
+    }
+
+    public function timestamps(): self {
+        $driver = $this->driver;
+        $this->timestamp('created_at')->nullable();
+        $updatedAtDefault = match($driver) {
+            'mysql' => 'DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP',
+            'pgsql' => 'DEFAULT CURRENT_TIMESTAMP',
+            'sqlite' => 'DEFAULT CURRENT_TIMESTAMP',
+            default => ''
         };
-        $this->columns[] = "$name $type";
+        $this->columns[] = "updated_at TIMESTAMP NULL $updatedAtDefault";
         return $this;
     }
 
     public function getColumns(): array {
         return $this->columns;
+    }
+    
+    public function getConstraints(): array {
+        return $this->constraints;
     }
 }
