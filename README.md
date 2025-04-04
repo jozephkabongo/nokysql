@@ -1,8 +1,14 @@
 # NokySQL by jozeph kabongo
 
-  A lightweight PHP library specialized in database access with fluent query builder and secure prepared statements.  
-  Build complex SQL queries with method chaining and execute them safely in SQL.
-
+  NokySQL is a lightweight, high-performance SQL Query Builder for PHP that bridges the gap between raw SQL and full ORMs.
+  
+## Designed for developers who want:
+  - Fluent, expressive syntax without heavy ORM overhead
+  - Multiple database support (MySQL, PostgreSQL, SQLite)
+  - Full control over generated queries
+  - Enterprise-grade security with automatic prepared statements
+  - Zero configuration philosophy
+  - 
 ## Features:
   - Fluent Query Builder for SELECT/INSERT/UPDATE/DELETE  
   - Multi-Database Support: MySQL, PostgreSQL, SQLite  
