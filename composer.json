@@ -1,6 +1,6 @@
 {
     "name": "jozephkabongo/nokysql",
-    "description": "NokySQL is a lightweight PHP library specialized in database access, focused on speed, security and ease of use for fast queries. It's compatible with MySQL, PostgreSQL, and SQLite.",
+    "description": "NokySQL is a lightweight, high-performance SQL Query Builder for PHP that bridges the gap between raw SQL and full ORMs.",
     "version": "1.0.0",
     "type": "library",
     "repositories": [
