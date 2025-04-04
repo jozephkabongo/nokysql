@@ -14,8 +14,10 @@
             'where' => [],
             'order' => [],
             'limit' => null,
+            'offset' => null,
             'data' => []
         ];
+        private bool $isQueued = false;
 
         public function __construct(Database $db, string $table, string $type) {
             $this->db = $db;
@@ -54,6 +56,14 @@
             return $this;
         }
 
+        public function toSql(): array {
+            $method = 'build' . ucfirst(string: strtolower(string: $this->type));
+            if (!method_exists(object_or_class: $this, method: $method)) {
+                throw new QueryException(message: "Unsupported query type", sql: '');
+            }
+            return $this->$method();
+        }
+
         public function execute(): array|bool {
             $method = 'build' . ucfirst(string: strtolower(string: $this->type));
             if (!method_exists(object_or_class: $this, method: $method)) {
@@ -64,6 +74,33 @@
             $stmt = $this->db->query(sql: $sql, params: $params);                            
 
             return $this->type === 'SELECT' ? $stmt->fetchAll() : true;
+        }
+
+        public function queue(): self {
+            $this->isQueued = true;
+            $this->db->addToQueue($this);
+            return $this;
+        }
+    
+        public function isQueued(): bool {
+            return $this->isQueued;
+        }
+
+        public function offset(int $offset): self {
+            $this->components['offset'] = $offset;
+            return $this;
+        }
+        
+        private function buildOffset(): string {
+            if ($this->components['offset'] === null) {
+                return '';
+            }
+        
+            return match($this->db->getDriver()) {
+                'mysql', 'pgsql' => " OFFSET {$this->components['offset']}",
+                'sqlite' => " LIMIT -1 OFFSET {$this->components['offset']}",
+                default => ''
+            };
         }
 
         private function buildSelect(): array {
@@ -85,6 +122,7 @@
                 $sql .= " LIMIT {$this->components['limit']}";
             }
 
+            $sql .= $this->buildOffset();
             return [$sql, $this->components['params'] ?? []];
         }
 
