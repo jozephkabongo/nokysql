@@ -9,7 +9,7 @@
     class Database {
         private PDO $pdo;
         private string $driver;
-        private array $queries = [];
+        private array $queuedQueries = [];
 
         public function __construct(string $driver, array $config) {
             $this->driver = $driver;
@@ -63,6 +63,25 @@
             } catch (\PDOException $e) {
                 throw new QueryException(message: $e->getMessage(), sql: $sql, params: $params);
             }
+        }
+        
+        // Parallel queries
+        public function queue(QueryBuilder $query): self {
+            [$sql, $params] = $query->toSql();
+            $this->queuedQueries[] = compact(var_name: 'sql', var_names: 'params');
+            return $this;
+        }
+        public function addToQueue(QueryBuilder $query): void {
+            $this->queuedQueries[] = $query;
+        }
+    
+        public function executeParallel(): array {
+            $results = [];
+            foreach ($this->queuedQueries as $query) {
+                $results[] = $query->execute();
+            }
+            $this->queuedQueries = [];
+            return $results;
         }
 
         // Transactions
