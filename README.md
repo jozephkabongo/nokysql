@@ -8,7 +8,7 @@
   - Full control over generated queries
   - Enterprise-grade security with automatic prepared statements
   - Zero configuration philosophy
-  - 
+    
 ## Features:
   - Fluent Query Builder for SELECT/INSERT/UPDATE/DELETE  
   - Multi-Database Support: MySQL, PostgreSQL, SQLite  
