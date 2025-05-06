@@ -16,7 +16,7 @@
             'limit' => null,
             'offset' => null,
             'data' => []
-        ];
+        ]; 
         private bool $isQueued = false;
 
         public function __construct(Database $db, string $table, string $type) {
