@@ -124,7 +124,7 @@
 
             $sql .= $this->buildOffset();
             return [$sql, $this->components['params'] ?? []];
-        }
+        } 
 
         private function buildInsert(): array {
             $columns = implode(separator: ', ', array: array_keys($this->components['data']));
